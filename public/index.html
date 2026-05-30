@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Enterprise Polyglot Portal</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <h1>🛍️ Enterprise Hybrid E-Shop</h1>
+        <div id="navButtons">
+            <span id="welcomeMsg">Welcome, Guest</span> | 
+            <button onclick="switchView('authSection')">Login/Register</button>
+            <button onclick="switchView('userSection')">User Shop</button>
+            <button onclick="switchView('adminSection')">Admin Dashboard</button>
+        </div>
+    </header>
+
+    <!-- 1. AUTH CONTAINER -->
+    <section id="authSection" class="view-container box">
+        <h2>Lock Identification Access</h2>
+        <input type="text" id="authName" placeholder="Name (Registration Only)">
+        <input type="email" id="authEmail" placeholder="Email Address">
+        <input type="password" id="authPassword" placeholder="Secret Key Token Access">
+        <select id="authRole"><option value="user">User Profile</option><option value="admin">System Administrator</option></select>
+        <button onclick="handleAuth('login')">Account Entry Authentication</button>
+        <button onclick="handleAuth('register')">Register Secure Record</button>
+    </section>
+
+    <!-- 2. USER SHOPPING COMPLEX -->
+    <section id="userSection" class="view-container" style="display:none;">
+        <div class="grid">
+            <div class="box">
+                <h3>Product Catalog (From MongoDB)</h3>
+                <div id="productCatalog"></div>
+            </div>
+            <div class="box">
+                <h3>Your Active Basket & Delivery Options</h3>
+                <div id="cartDisplay"></div>
+                <hr>
+                <h4>Register Delivery Address (To SQL)</h4>
+                <input type="text" id="shipStreet" placeholder="Street Address">
+                <input type="text" id="shipCity" placeholder="City">
+                <input type="text" id="shipZip" placeholder="Postal Code">
+                <button onclick="submitAddress()">Save Delivery Coordinates</button>
+                <hr>
+                <button id="payBtn" style="background:#13aa52; color:white; width:100%; padding:12px;" onclick="triggerCheckout()">Process Card Transaction via Stripe</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. ADMINISTRATIVE TRACKING DASHBOARD -->
+    <section id="adminSection" class="view-container" style="display:none;">
+        <div class="grid">
+            <div class="box" style="border-top: 5px solid #d9534f;">
+                <h3>System Site Activity Tracker Metrics (From MongoDB)</h3>
+                <h1 id="metricTraffic">0</h1>
+                <p>Aggregated user request updates routed live through backend middleware pipelines.</p>
+            </div>
+            <div class="box" style="border-top: 5px solid #0275d8;">
+                <h3>Financial Sales Records & Ledger Orders (From SQL)</h3>
+                <div id="adminOrdersTable"></div>
+            </div>
+        </div>
+    </section>
+
+    <script src="client.js"></script>
+</body>
+</html>
