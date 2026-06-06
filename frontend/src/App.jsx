@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function App() {
   const [view, setView] = useState('landing'); 
@@ -11,16 +11,18 @@ export default function App() {
   const [prodForm, setProdForm] = useState({ name: '', price: '', ram: '', storage: '' });
   const [addressForm, setAddressForm] = useState({ street: '', city: '', zip: '' });
   const [adminMetrics, setAdminMetrics] = useState({ orders: [], trafficHits: 0 });
-  
-   useEffect(() => { loadCatalog(); }, []);
+  const [activeAddressId, setActiveAddressId] = useState(null);
 
+  // Core functions declared first so JavaScript references them correctly
   const loadCatalog = async () => {
     const res = await fetch('http://localhost:3000/api/products');
     const data = await res.json();
     setProducts(data);
   };
 
-  
+  useEffect(() => { 
+    loadCatalog(); 
+  }, []);
 
   const handleLogin = async (endpoint, payload) => {
     const res = await fetch(`http://localhost:3000/api/${endpoint}`, {
@@ -56,44 +58,100 @@ export default function App() {
     loadUserCart(session.userId);
   };
 
-  // Sends the address fields to your updated MySQL backend route
+  const removeFromCart = async (pid) => {
+    if (!pid) return;
+    await fetch('http://localhost:3000/api/cart', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: session.userId, productId: pid })
+    });
+    loadUserCart(session.userId);
+  };
+
   const submitAddress = async () => {
-    if(!addressForm.street || !addressForm.city || !addressForm.zip) {
-      return alert("Please fill out all address fields before saving.");
-    }
-    const res = await fetch('http://localhost:3000/api/address', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: session.userId,
-        street: addressForm.street,
-        city: addressForm.city,
-        zip: addressForm.zip
-      })
-    });
-    const data = await res.json();
-    if(data.success) {
-      alert(data.message);
-    } else {
-      alert("Failed to save address to MySQL.");
-    }
-  };
+  if(!addressForm.street || !addressForm.city || !addressForm.zip) {
+    return alert("Please fill out all address fields before saving.");
+  }
+  const res = await fetch('http://localhost:3000/api/address', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userId: session.userId,
+      street: addressForm.street,
+      city: addressForm.city,
+      zip: addressForm.zip
+    })
+  });
+  const data = await res.json();
+  if(data.success) {
+    setActiveAddressId(data.addressId); // Keep track of the active address ID
+    alert(data.message);
+  } else {
+    alert("Failed to save address to MySQL.");
+  }
+};
 
-  const triggerStripePayment = async () => {
-    const total = cart.items.reduce((sum, item) => sum + (item.productId.price * item.quantity), 0);
-    if(total <= 0) return alert("Your cart is empty!");
+const triggerStripePayment = async () => {
+  const total = cart.items.reduce((sum, item) => sum + ((item.productId?.price || 0) * item.quantity), 0);
+  if(total <= 0) return alert("Your cart is empty!");
+  if(!activeAddressId) return alert("Please fill out and click 'Save Address to SQL' before paying!");
 
-    const res = await fetch('http://localhost:3000/api/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: session.userId, totalAmount: total })
-    });
-    const data = await res.json();
-    if(data.success) {
-      alert(`Stripe Authorization Success! Transaction ID: ${data.transactionId}`);
-      loadUserCart(session.userId); // Wipes the visual cart since MongoDB document was deleted
-    }
-  };
+  const res = await fetch('http://localhost:3000/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      userId: session.userId, 
+      totalAmount: total,
+      addressId: activeAddressId // Sending the chosen address ID right here
+    })
+  });
+  const data = await res.json();
+  if(data.success) {
+    alert(`Stripe Authorization Success! Transaction ID: ${data.transactionId}`);
+    setActiveAddressId(null); // Reset after order completion
+    loadUserCart(session.userId);
+  } else {
+    alert(data.error || "Checkout request rejected.");
+  }
+};
+
+  // const submitAddress = async () => {
+  //   if(!addressForm.street || !addressForm.city || !addressForm.zip) {
+  //     return alert("Please fill out all address fields before saving.");
+  //   }
+  //   const res = await fetch('http://localhost:3000/api/address', {
+  //     method: 'POST',
+  //     headers: { 'Content-Type': 'application/json' },
+  //     body: JSON.stringify({
+  //       userId: session.userId,
+  //       street: addressForm.street,
+  //       city: addressForm.city,
+  //       zip: addressForm.zip
+  //     })
+  //   });
+  //   const data = await res.json();
+  //   if(data.success) {
+  //     alert(data.message);
+  //   } else {
+  //     alert("Failed to save address to MySQL.");
+  //   }
+  // };
+
+  // const triggerStripePayment = async () => {
+  //   const total = cart.items.reduce((sum, item) => sum + ((item.productId?.price || 0) * item.quantity), 0);
+  //   if(total <= 0) return alert("Your cart is empty!");
+
+  //   const res = await fetch('http://localhost:3000/api/checkout', {
+  //     method: 'POST',
+  //     headers: { 'Content-Type': 'application/json' },
+  //     body: JSON.stringify({ userId: session.userId, totalAmount: total })
+  //   });
+  //   const data = await res.json();
+  //   if(data.success) {
+  //     alert(`Stripe Authorization Success! Transaction ID: ${data.transactionId}`);
+  //     loadUserCart(session.userId);
+  //   }
+  // };
 
   const loadAdminPanel = async () => {
     const res = await fetch('http://localhost:3000/api/admin/metrics');
@@ -174,11 +232,22 @@ export default function App() {
           <div style={{ flex: 1, background: 'white', padding: '20px', borderRadius: '8px' }}>
             <h3>Your Active Cart (MongoDB Live Cache)</h3>
             {cart?.items?.length === 0 ? <p style={{ color: '#777' }}>Your basket is empty.</p> : (
-              cart?.items?.map((item, idx) => (
-                <p key={idx} style={{ borderBottom: '1px solid #eee', paddingBottom: '5px' }}>
-                  {item.productId?.name} x {item.quantity} — ${(item.productId?.price * item.quantity).toFixed(2)}
-                </p>
-              ))
+              cart?.items?.map((item, idx) => {
+                const targetId = item.productId?._id || item.productId;
+                return (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', padding: '8px 0' }}>
+                    <p style={{ margin: 0 }}>
+                      {item.productId?.name || "Product"} x {item.quantity} — ${((item.productId?.price || 0) * item.quantity).toFixed(2)}
+                    </p>
+                    <button 
+                      onClick={() => removeFromCart(targetId)}
+                      style={{ background: '#ef4444', color: 'white', border: 'none', padding: '4px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                    >
+                      ✕ Remove
+                    </button>
+                  </div>
+                );
+              })
             )}
             
             <div style={{ marginTop: '20px', background: '#f8fafc', padding: '15px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
@@ -189,7 +258,7 @@ export default function App() {
               <button onClick={submitAddress} style={{ background: '#334155', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', marginTop: '5px' }}>Save Address to SQL</button>
             </div>
 
-            <h3 style={{ marginTop: '20px' }}>Total Amount: ${cart.items?.reduce((sum, item) => sum + (item.productId?.price * item.quantity), 0).toFixed(2)}</h3>
+            <h3 style={{ marginTop: '20px' }}>Total Amount: ${cart.items?.reduce((sum, item) => sum + ((item.productId?.price || 0) * item.quantity), 0).toFixed(2)}</h3>
             <button onClick={triggerStripePayment} style={{ width: '100%', padding: '12px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}>
               Pay via Stripe Test Simulator
             </button>
@@ -223,9 +292,9 @@ export default function App() {
             </div>
             
             <h4>Secure Financial Ledger Orders (From MySQL)</h4>
-            {/* <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 10px 0' }}>
+            <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 10px 0' }}>
               💡 Hint: Click on any <span style={{ color: '#d97706', fontWeight: 'bold' }}>Pending ⏳</span> button badge to switch it to Delivered inside MySQL!
-            </p> */}
+            </p>
 
             <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }} border="1" cellpadding="6">
               <thead>
@@ -252,7 +321,7 @@ export default function App() {
                               });
                               const data = await res.json();
                               if (data.success) {
-                                loadAdminPanel(); // Instantly refetch statistics from MySQL
+                                loadAdminPanel(); 
                               } else {
                                 alert("Failed to update system registry logistics column.");
                               }
